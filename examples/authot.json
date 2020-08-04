@@ -1,0 +1,28 @@
+{
+	"job_id": 1234,
+	"parameters": [
+		{
+			"id": "source_path",
+			"type": "string",
+			"store": "environment",
+			"value": "SOURCE_PATH"
+		},
+		{
+			"id": "authot_token",
+			"type": "string",
+			"store": "environment",
+			"value": "AUTHOT_TOKEN"
+		},
+		{
+			"id": "destination_path",
+			"type": "string",
+			"store": "environment",
+			"value": "DESTINATION_PATH"
+		},
+		{
+			"id": "ttml_indentifier",
+			"type": "string",
+			"value": "franceinfo"
+		}
+	]
+}

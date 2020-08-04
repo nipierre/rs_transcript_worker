@@ -1,2 +1,2 @@
-# rs_speech_to_text_worker
-Worker to process Speech to Text using different providers
+# rs_transcript_worker
+Worker to process Transcript using different providers
