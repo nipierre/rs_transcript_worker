@@ -1,10 +1,12 @@
-FROM rust:1.43-stretch as builder
+FROM rust:1.45-stretch as builder
 
 ADD . /src
 WORKDIR /src
 
 RUN apt-get update && \
     apt-get install -y libssl-dev && \
+    rustup toolchain install nightly && \
+    rustup default nightly && \
     cargo build --verbose --release && \
     cargo install --path .
 
