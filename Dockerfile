@@ -18,6 +18,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     	libavresample-dev \
     	libavutil-dev \
     	libclang1 \
+    	libpython3.8 \
 		libssl-dev \
 		pkg-config \
 		python3 \
