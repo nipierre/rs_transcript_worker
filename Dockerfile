@@ -31,7 +31,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     cargo install --path .
 
 FROM ubuntu:focal
-COPY --from=builder /usr/local/cargo/bin/transcript_worker /usr/bin
+COPY --from=builder /root/.cargo/bin/transcript_worker /usr/bin
 
 RUN apt update && \
 	apt install -y \
