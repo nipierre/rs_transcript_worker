@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:focal as builder
 ENV TZ=Europe/Paris
 
 ADD . /src
