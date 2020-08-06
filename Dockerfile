@@ -22,7 +22,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
 	ln -s /usr/lib/x86_64-linux-gnu/libpython3.8.so.1.0 /usr/lib/x86_64-linux-gnu/libpython3.8.so && \
 	curl https://sh.rustup.rs -sSf | \
     sh -s -- --default-toolchain nightly -y && \
-    source $HOME/.cargo/env && \
+    . $HOME/.cargo/env && \
     cargo build --verbose --release && \
     cargo install --path .
 
