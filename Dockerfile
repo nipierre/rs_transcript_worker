@@ -42,6 +42,7 @@ RUN apt update && \
     libavformat58 \
     libavresample4 \
     libavutil56 \
+    libpython3.8 \
     libssl1.1 \
     python3
 
