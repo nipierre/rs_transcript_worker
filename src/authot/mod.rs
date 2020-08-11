@@ -120,7 +120,7 @@ impl Authot {
 
   pub async fn get_websocket_url(&self, live_information: &AuthotLiveInformation) -> String {
     format!(
-      "{}/v2?access_token={}",
+      "{}?access_token={}",
       live_information
         .url
         .clone()
