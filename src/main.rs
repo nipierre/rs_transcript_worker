@@ -6,9 +6,7 @@ extern crate serde_json;
 use authot::websocket_response::WebsocketResponse;
 use futures::channel::mpsc::{channel, Sender};
 use futures_util::{future, pin_mut, StreamExt};
-use mcai_worker_sdk::{
-    prelude::*, job::JobResult, MessageError, MessageEvent,
-};
+use mcai_worker_sdk::{job::JobResult, prelude::*, MessageError, MessageEvent};
 use stainless_ffmpeg_sys::AVMediaType;
 use std::{
   convert::TryFrom,
@@ -17,11 +15,12 @@ use std::{
       AtomicUsize,
       Ordering::{Acquire, Release},
     },
-    mpsc::{Sender as StdSender}, 
+    mpsc::Sender as StdSender,
     Arc, Mutex,
   },
   thread,
   thread::JoinHandle,
+  time::Duration,
 };
 use tokio::runtime::Runtime;
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -37,7 +36,7 @@ struct TranscriptEvent {
   sequence_number: u64,
   start_time: Option<f32>,
   authot_live_id: Option<usize>,
-  audio_source_sender: Option<Arc<Mutex<Sender<Message>>>>,
+  audio_source_sender: Option<Sender<Message>>,
   sender: Option<Arc<Mutex<StdSender<ProcessResult>>>>,
   ws_thread: Option<JoinHandle<()>>,
 }
@@ -93,7 +92,7 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
 
     let (audio_source_sender, audio_source_receiver) = channel(10000);
 
-    self.audio_source_sender = Some(Arc::new(Mutex::new(audio_source_sender)));
+    self.audio_source_sender = Some(audio_source_sender);
 
     let cloned_sender = response_sender.clone();
     let start_time = self.start_time;
@@ -157,32 +156,46 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
     _stream_index: usize,
     process_frame: ProcessFrame,
   ) -> Result<ProcessResult> {
-      match process_frame {
-        ProcessFrame::AudioVideo(frame) => {
-            unsafe {
-              trace!(
-                "Frame {} samples, {} channels, {} bytes",
-                (*frame.frame).nb_samples,
-                (*frame.frame).channels,
-                (*frame.frame).linesize[0],
-              );
+    match process_frame {
+      ProcessFrame::AudioVideo(frame) => unsafe {
+        trace!(
+          "Frame {} samples, {} channels, {} bytes",
+          (*frame.frame).nb_samples,
+          (*frame.frame).channels,
+          (*frame.frame).linesize[0],
+        );
 
-              let size = ((*frame.frame).channels * (*frame.frame).nb_samples * 2) as usize;
-              let data = Vec::from_raw_parts((*frame.frame).data[0], size, size);
-              let message = Message::binary(data.clone());
-              std::mem::forget(data);
+        let size = ((*frame.frame).channels * (*frame.frame).nb_samples * 2) as usize;
+        let data = Vec::from_raw_parts((*frame.frame).data[0], size, size);
+        let message = Message::binary(data.clone());
+        std::mem::forget(data);
 
-              if let Some(audio_source_sender) = &mut self.audio_source_sender {
-	        audio_source_sender.lock().unwrap().try_send(message.clone()).unwrap()
+        if let Some(audio_source_sender) = &mut self.audio_source_sender {
+          let mut sended = false;
+          while !sended {
+            match audio_source_sender.try_send(message.clone()) {
+              Ok(_) => {
+                sended = true;
+              }
+              Err(error) => {
+                if error.is_full() {
+                  info!("C'est FULL");
+                  thread::sleep(Duration::from_millis(50));
+                }
+                if error.is_disconnected() {
+                  return Err(MessageError::ProcessingError(job_result));
+                }
               }
             }
+          }
         }
-        _ => {
-          return Err(MessageError::RuntimeError(format!(
-            "Could not open frame as it was no AudioVideo frame in job {:?}",
-            job_result.get_str_job_id()
-          )))
-        }
+      },
+      _ => {
+        return Err(MessageError::RuntimeError(format!(
+          "Could not open frame as it was no AudioVideo frame in job {:?}",
+          job_result.get_str_job_id()
+        )))
+      }
     };
 
     Ok(ProcessResult::empty())
@@ -197,7 +210,7 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
 
       let message = Message::Text(data.to_string());
 
-      audio_source_sender.lock().unwrap().try_send(message.clone()).unwrap()
+      audio_source_sender.try_send(message.clone()).unwrap()
     }
 
     self.ws_thread.take().map(JoinHandle::join);
@@ -205,9 +218,7 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
   }
 }
 
-fn get_first_audio_stream_id(
-  format_context: &FormatContext,
-) -> Result<Vec<StreamDescriptor>> {
+fn get_first_audio_stream_id(format_context: &FormatContext) -> Result<Vec<StreamDescriptor>> {
   // select first audio stream index
   for stream_index in 0..format_context.get_nb_streams() {
     if format_context.get_stream_type(stream_index as isize) == AVMediaType::AVMEDIA_TYPE_AUDIO {
@@ -215,15 +226,12 @@ fn get_first_audio_stream_id(
       let sample_formats = vec!["s16".to_string()];
       let sample_rates = vec![16000];
       let filters = vec![AudioFilter::Format(AudioFormat {
-            sample_rates,
-            channel_layouts,
-            sample_formats,
-          })];
+        sample_rates,
+        channel_layouts,
+        sample_formats,
+      })];
 
-      let stream_descriptor = StreamDescriptor::new_audio(
-        stream_index as usize,
-        filters
-      );
+      let stream_descriptor = StreamDescriptor::new_audio(stream_index as usize, filters);
 
       return Ok(vec![stream_descriptor]);
     }

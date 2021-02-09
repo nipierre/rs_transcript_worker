@@ -15,9 +15,7 @@ use std::{
 };
 use tokio::net::TcpStream;
 use tokio_tls::TlsStream;
-use tokio_tungstenite::{
-   connect_async, stream::Stream, WebSocketStream,
-};
+use tokio_tungstenite::{connect_async, stream::Stream, WebSocketStream};
 use websocket_response::WebsocketResponse;
 type McaiWebSocketStream = WebSocketStream<Stream<TcpStream, TlsStream<TcpStream>>>;
 
@@ -35,30 +33,31 @@ impl Authot {
     };
 
     let websocket_url = match &parameters.provider[..] {
-        "authot" => {
-            let authot = Authot {
-              token: parameters
-                .authot_token
-                .clone()
-                .unwrap_or_else(|| "".to_string()),
-            };
-            if let Some(authot_live_id) = parameters.authot_live_id {
-              authot
-                .get_websocket_url_from_live_id(authot_live_id)
-                .await
-                .unwrap()
-            } else {
-              let authot_live_information = authot.new_live().await.unwrap();
-              authot.get_websocket_url(&authot_live_information).await
-            }
+      "authot" => {
+        let authot = Authot {
+          token: parameters
+            .authot_token
+            .clone()
+            .unwrap_or_else(|| "".to_string()),
+        };
+        if let Some(authot_live_id) = parameters.authot_live_id {
+          authot
+            .get_websocket_url_from_live_id(authot_live_id)
+            .await
+            .unwrap()
+        } else {
+          let authot_live_information = authot.new_live().await.unwrap();
+          authot.get_websocket_url(&authot_live_information).await
         }
-        "speechmatics" => {
-            "ws://192.168.101.109:9000/v2".to_string()
-        }
-        _ => {
-            info!("Provider {} not found, fallback to speechmatics", parameters.provider);
-            "ws://localhost:9000/v2".to_string()
-        }
+      }
+      "speechmatics" => "ws://192.168.101.109:9000/v2".to_string(),
+      _ => {
+        info!(
+          "Provider {} not found, fallback to speechmatics",
+          parameters.provider
+        );
+        "ws://localhost:9000/v2".to_string()
+      }
     };
 
     let (mut ws_stream, _) = connect_async(websocket_url)
@@ -77,7 +76,8 @@ impl Authot {
       .expect("unable to send start recognition information");
 
     while let Some(Ok(event)) = ws_stream.next().await {
-      let event: Result<WebsocketResponse> = self::websocket_response::WebsocketResponse::try_from(event);
+      let event: Result<WebsocketResponse> =
+        self::websocket_response::WebsocketResponse::try_from(event);
       if let Ok(event) = event {
         if event.message == "RecognitionStarted" {
           break;
@@ -132,9 +132,11 @@ impl Authot {
       .get(&url)
       .header("access-token", self.token.to_owned())
       .send()
-      .await.unwrap()
+      .await
+      .unwrap()
       .json::<AuthotLiveInformation>()
-      .await.unwrap()
+      .await
+      .unwrap()
   }
 
   pub async fn get_websocket_url(&self, live_information: &AuthotLiveInformation) -> String {

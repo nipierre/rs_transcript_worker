@@ -17,7 +17,8 @@ impl TryFrom<Message> for WebsocketResponse {
   type Error = MessageError;
   fn try_from(value: Message) -> Result<Self> {
     if let Message::Text(text) = value {
-      serde_json::from_str(&text).map_err(|e| MessageError::RuntimeError(format!("Invalid data: {}",e.to_string())))
+      serde_json::from_str(&text)
+        .map_err(|e| MessageError::RuntimeError(format!("Invalid data: {}", e.to_string())))
     } else {
       Err(MessageError::RuntimeError(format!("Bad message format")))
     }
