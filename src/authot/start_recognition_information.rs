@@ -18,6 +18,8 @@ impl StartRecognitionInformation {
       transcription_config: TranscriptionConfig {
         language: Language::Fr,
         enable_partials: false,
+        max_delay: 5.0,
+        diarization: "speaker_change".to_string(),
         additional_vocab: vec![],
       },
       audio_format: AudioFormat {
@@ -46,6 +48,8 @@ impl TryInto<Message> for StartRecognitionInformation {
 pub struct TranscriptionConfig {
   pub language: Language,
   pub enable_partials: bool,
+  pub max_delay: f64,
+  pub diarization: String,
   pub additional_vocab: Vec<String>,
 }
 

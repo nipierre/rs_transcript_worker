@@ -91,7 +91,7 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
 
     let cloned_parameters = parameters;
 
-    let (audio_source_sender, audio_source_receiver) = channel(100);
+    let (audio_source_sender, audio_source_receiver) = channel(10000);
 
     self.audio_source_sender = Some(Arc::new(Mutex::new(audio_source_sender)));
 
@@ -112,13 +112,13 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
         let receive_from_ws = {
           ws_receiver.for_each(|event| async {
             let event = event.unwrap();
-            trace!("{}", event);
+            info!("{}", event);
             let event: Result<WebsocketResponse> = WebsocketResponse::try_from(event);
 
             if let Ok(event) = event {
               if event.message == "AudioAdded" {}
               if event.message == "EndOfTranscript" {
-                info!("End of transcript from Authot");
+                info!("End of transcript from provider");
                 let result = ProcessResult::end_of_process();
                 cloned_sender.lock().unwrap().send(result).unwrap();
               }
