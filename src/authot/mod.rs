@@ -7,16 +7,18 @@ pub use start_recognition_information::StartRecognitionInformation;
 use crate::WorkerParameters;
 use authot_live_information::AuthotLiveInformation;
 use futures_util::{sink::SinkExt, stream::StreamExt};
-use mcai_worker_sdk::{debug, info};
-use reqwest::{Client, Error};
+use mcai_worker_sdk::prelude::*;
+use reqwest::Client;
 use std::{
   convert::{TryFrom, TryInto},
   thread, time,
 };
 use tokio::net::TcpStream;
 use tokio_tls::TlsStream;
-use tokio_tungstenite::{connect_async, stream::Stream, WebSocketStream};
-
+use tokio_tungstenite::{
+   connect_async, stream::Stream, WebSocketStream,
+};
+use websocket_response::WebsocketResponse;
 type McaiWebSocketStream = WebSocketStream<Stream<TcpStream, TlsStream<TcpStream>>>;
 
 pub struct Authot {
@@ -32,14 +34,31 @@ impl Authot {
         .unwrap_or_else(|| "".to_string()),
     };
 
-    let websocket_url = if let Some(authot_live_id) = parameters.authot_live_id {
-      authot
-        .get_websocket_url_from_live_id(authot_live_id)
-        .await
-        .unwrap()
-    } else {
-      let authot_live_information = authot.new_live().await.unwrap();
-      authot.get_websocket_url(&authot_live_information).await
+    let websocket_url = match &parameters.provider[..] {
+        "authot" => {
+            let authot = Authot {
+              token: parameters
+                .authot_token
+                .clone()
+                .unwrap_or_else(|| "".to_string()),
+            };
+            if let Some(authot_live_id) = parameters.authot_live_id {
+              authot
+                .get_websocket_url_from_live_id(authot_live_id)
+                .await
+                .unwrap()
+            } else {
+              let authot_live_information = authot.new_live().await.unwrap();
+              authot.get_websocket_url(&authot_live_information).await
+            }
+        }
+        "speechmatics" => {
+            "ws://192.168.101.109:9000/v2".to_string()
+        }
+        _ => {
+            info!("Provider {} not found, fallback to speechmatics", parameters.provider);
+            "ws://localhost:9000/v2".to_string()
+        }
     };
 
     let (mut ws_stream, _) = connect_async(websocket_url)
@@ -58,7 +77,7 @@ impl Authot {
       .expect("unable to send start recognition information");
 
     while let Some(Ok(event)) = ws_stream.next().await {
-      let event = self::websocket_response::WebsocketResponse::try_from(event);
+      let event: Result<WebsocketResponse> = self::websocket_response::WebsocketResponse::try_from(event);
       if let Ok(event) = event {
         if event.message == "RecognitionStarted" {
           break;
@@ -69,17 +88,17 @@ impl Authot {
     (authot, ws_stream)
   }
 
-  pub async fn new_live(&self) -> Result<AuthotLiveInformation, Error> {
+  pub async fn new_live(&self) -> Result<AuthotLiveInformation> {
     let url = format!(
       "https:///authot.live/api/streams/new?lang=fr&translation=false&access_token={}",
       self.token
     );
 
-    let client = Client::builder().build()?;
+    let client = Client::builder().build().unwrap();
 
-    let initial_response = client.post(&url).send().await?;
+    let initial_response = client.post(&url).send().await.unwrap();
 
-    let text = initial_response.text().await?;
+    let text = initial_response.text().await.unwrap();
 
     debug!("{:?}", text);
     let initial_response: AuthotLiveInformation = serde_json::from_str(&text).unwrap();
@@ -92,7 +111,7 @@ impl Authot {
 
       let response = self
         .get_live_information(initial_response.id.unwrap())
-        .await?;
+        .await;
 
       info!(
         "authot job id {} - {}",
@@ -105,17 +124,17 @@ impl Authot {
     }
   }
 
-  async fn get_live_information(&self, live_id: u32) -> Result<AuthotLiveInformation, Error> {
+  async fn get_live_information(&self, live_id: u32) -> AuthotLiveInformation {
     let url = format!("https://authot.live/api/streams/{}/info_stream", live_id);
-    let client = Client::builder().build()?;
+    let client = Client::builder().build().unwrap();
 
     client
       .get(&url)
       .header("access-token", self.token.to_owned())
       .send()
-      .await?
+      .await.unwrap()
       .json::<AuthotLiveInformation>()
-      .await
+      .await.unwrap()
   }
 
   pub async fn get_websocket_url(&self, live_information: &AuthotLiveInformation) -> String {
@@ -129,8 +148,8 @@ impl Authot {
     )
   }
 
-  pub async fn get_websocket_url_from_live_id(&self, live_id: u32) -> Result<String, Error> {
-    let live_information = self.get_live_information(live_id).await?;
+  pub async fn get_websocket_url_from_live_id(&self, live_id: u32) -> Result<String> {
+    let live_information = self.get_live_information(live_id).await;
     Ok(self.get_websocket_url(&live_information).await)
   }
 }
