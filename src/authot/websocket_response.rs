@@ -2,7 +2,7 @@ use mcai_worker_sdk::prelude::*;
 use std::convert::TryFrom;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WebsocketResponse {
   pub message: String,
   pub id: Option<String>,
@@ -11,6 +11,7 @@ pub struct WebsocketResponse {
   pub quality: Option<String>,
   pub reason: Option<String>,
   pub metadata: Option<Metadata>,
+  pub results: Option<Vec<Results>>,
 }
 
 impl TryFrom<Message> for WebsocketResponse {
@@ -70,4 +71,19 @@ impl Metadata {
       body,
     }
   }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Results {
+  pub alternatives: Vec<Alternatives>,
+  pub start_time: f64,
+  pub end_time: f64,
+  #[serde(rename = "type")]
+  pub kind: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Alternatives {
+  pub confidence: f64,
+  pub content: String,
 }

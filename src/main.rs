@@ -10,6 +10,7 @@ use mcai_worker_sdk::{job::JobResult, prelude::*, MessageError, MessageEvent};
 use stainless_ffmpeg_sys::AVMediaType;
 use std::{
   convert::TryFrom,
+  str::FromStr,
   sync::{
     atomic::{
       AtomicUsize,
@@ -56,9 +57,32 @@ pub struct WorkerParameters {
   /// # Provider
   /// Name of the provider used for the transcription
   provider: String,
+  /// # Output Format
+  /// Output format between EBU-TT-D and json
+  output_format: Option<String>,
   destination_path: String,
   source_path: String,
 }
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+enum OutputFormat {
+  EbuTtD,
+  Json,
+}
+
+impl FromStr for OutputFormat {
+
+    type Err = mcai_worker_sdk::MessageError;
+
+    fn from_str(input: &str) -> Result<OutputFormat> {
+        match input {
+            "EBU_TT_D"  => Ok(OutputFormat::EbuTtD),
+            "JSON"  => Ok(OutputFormat::Json),
+            _      => Ok(OutputFormat::EbuTtD),
+        }
+    }
+}
+
 
 impl MessageEvent<WorkerParameters> for TranscriptEvent {
   fn get_name(&self) -> String {
@@ -89,6 +113,9 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
     let selected_streams = get_first_audio_stream_id(&format_context)?;
 
     let cloned_parameters = parameters;
+    let param_output_format = cloned_parameters.output_format.clone();
+
+    let output_format = OutputFormat::from_str(&(param_output_format.unwrap_or("JSON".to_string()))).unwrap();
 
     let (audio_source_sender, audio_source_receiver) = channel(10000);
 
@@ -122,13 +149,27 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
                 cloned_sender.lock().unwrap().send(result).unwrap();
               }
               if event.message == "AddTranscript" {
-                if let Some(metadata) = event.metadata {
-                  let sequence_index = sequence_number.load(Acquire);
-                  let result =
-                    ProcessResult::new_xml(metadata.generate_ttml(start_time, sequence_index));
-                  cloned_sender.lock().unwrap().send(result).unwrap();
+                match output_format {
+                  OutputFormat::EbuTtD => {
+                    if let Some(metadata) = event.metadata {
+                      let sequence_index = sequence_number.load(Acquire);
+                      let result =
+                        ProcessResult::new_xml(metadata.generate_ttml(start_time, sequence_index));
+                      cloned_sender.lock().unwrap().send(result).unwrap();
 
-                  sequence_number.store(sequence_index + 1, Release);
+                      sequence_number.store(sequence_index + 1, Release);
+                    }
+                  }
+                  OutputFormat::Json => {
+                    let sequence_index = sequence_number.load(Acquire);
+                      let message = serde_json::to_string(&event).unwrap_or("".to_string());
+                      info!("{:?}", message);
+                      let result =
+                        ProcessResult::new_json(message);
+                      cloned_sender.lock().unwrap().send(result).unwrap();
+ 
+                      sequence_number.store(sequence_index + 1, Release);
+                  }
                 }
               }
             } else {
