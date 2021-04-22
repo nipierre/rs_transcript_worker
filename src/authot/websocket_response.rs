@@ -75,15 +75,17 @@ impl Metadata {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Results {
-  pub alternatives: Vec<Alternatives>,
+  pub alternatives: Option<Vec<Alternatives>>,
   pub start_time: f64,
   pub end_time: f64,
   #[serde(rename = "type")]
   pub kind: String,
+  pub is_eos: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Alternatives {
   pub confidence: f64,
   pub content: String,
+  pub language: String,
 }

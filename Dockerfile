@@ -1,4 +1,4 @@
-FROM ubuntu:groovy as builder
+FROM ubuntu:focal as builder
 ENV TZ=Europe/Paris
 
 ADD . /src
@@ -25,12 +25,12 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
         && \
     ln -s /usr/lib/x86_64-linux-gnu/libpython3.8.so.1.0 /usr/lib/x86_64-linux-gnu/libpython3.8.so && \
     curl https://sh.rustup.rs -sSf | \
-    sh -s -- --default-toolchain nightly -y && \
+    sh -s -- --default-toolchain nightly-2021-03-23 -y && \
     . $HOME/.cargo/env && \
-    cargo build --verbose --release && \
+    cargo build --verbose && \
     cargo install --path .
 
-FROM ubuntu:groovy
+FROM ubuntu:focal
 COPY --from=builder /root/.cargo/bin/transcript_worker /usr/bin
 
 RUN apt update && \

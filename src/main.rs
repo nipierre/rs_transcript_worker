@@ -7,7 +7,6 @@ use authot::websocket_response::WebsocketResponse;
 use futures::channel::mpsc::{channel, Sender};
 use futures_util::{future, pin_mut, StreamExt};
 use mcai_worker_sdk::{job::JobResult, prelude::*, MessageError, MessageEvent};
-use stainless_ffmpeg_sys::AVMediaType;
 use std::{
   convert::TryFrom,
   str::FromStr,
@@ -162,10 +161,10 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
                   }
                   OutputFormat::Json => {
                     let sequence_index = sequence_number.load(Acquire);
-                      let message = serde_json::to_string(&event).unwrap_or("".to_string());
-                      info!("{:?}", message);
+//                      let message = serde_json::to_string(&event).unwrap_or("".to_string());
+                      info!("{:?}", event);
                       let result =
-                        ProcessResult::new_json(message);
+                        ProcessResult::new_json(&event);
                       cloned_sender.lock().unwrap().send(result).unwrap();
  
                       sequence_number.store(sequence_index + 1, Release);
@@ -197,9 +196,9 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
     _stream_index: usize,
     process_frame: ProcessFrame,
   ) -> Result<ProcessResult> {
-    match process_frame {
+    match &process_frame {
       ProcessFrame::AudioVideo(frame) => unsafe {
-        trace!(
+        info!(
           "Frame {} samples, {} channels, {} bytes",
           (*frame.frame).nb_samples,
           (*frame.frame).channels,
@@ -230,6 +229,7 @@ impl MessageEvent<WorkerParameters> for TranscriptEvent {
             }
           }
         }
+            drop(frame);
       },
       _ => {
         return Err(MessageError::RuntimeError(format!(
